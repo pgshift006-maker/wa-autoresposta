@@ -22,7 +22,7 @@ sock.ev.on('messages.upsert', (m) => {
 ## Instalação
 
 ```bash
-npm install github:SEU-USUARIO/wa-autoresposta
+npm install github:pgshift006-maker/wa-autoresposta
 ```
 
 Ou copie a pasta para dentro do seu projeto. Não há `npm install` a fazer dentro dela: o pacote não tem dependências.
