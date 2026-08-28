@@ -234,6 +234,55 @@ secao('Falha da fonte de configuração');
   checa('sock nulo não derruba o robô', true);
 }
 
+secao('Config recarregada antes de responder');
+{
+  // O caso real: o dono fecha a loja no painel e o cliente manda mensagem
+  // logo em seguida. Sem recarregar, o robô responderia com o cache antigo
+  // e diria que a loja está aberta.
+  let chamadas = 0;
+  let estaAberta = true;
+  const HOJE = horario.DIAS_PT[horario.agoraNoFuso('America/Sao_Paulo').dia];
+  const r = criarRobo({
+    padroes: { loja: 'Loja Teste', link: 'x', delayMinS: 0, delayMaxS: 0 },
+    frescorMs: 0, // qualquer mensagem dispara a recarga
+    carregarConfig: async () => {
+      chamadas++;
+      return { config: { delay_min_s: 0, delay_max_s: 0 }, override: estaAberta ? '1' : '0' };
+    },
+    carregarHorarios: async () => ([{ day: HOJE, open: '00:00', close: '23:59', active: true }]),
+    log: { log(){}, warn(){}, error(){} },
+  });
+  await r.atualizar();
+  checa('parte com a loja aberta', r.lojaAberta() === true);
+
+  // dono fecha a loja — o cache do robô ainda diz aberta
+  estaAberta = false;
+  checa('cache ainda desatualizado antes da mensagem', r.lojaAberta() === true);
+
+  const s = criarSock();
+  await r.tratarMensagem(s, msg('5511900000020@s.whatsapp.net', 'oi'));
+  checa('recarregou a config ao receber a mensagem', chamadas >= 2, chamadas + ' leituras');
+  checa('respondeu com a loja FECHADA, nao com o cache antigo',
+    s.enviados.length === 1 && /fechados/.test(s.enviados[0].texto));
+
+  // responder_fechado:false deve calar E nao gastar o cooldown do contato
+  let fechada2 = false;
+  const r2 = criarRobo({
+    padroes: { loja: 'L', link: 'x', delayMinS: 0, delayMaxS: 0 },
+    frescorMs: 0,
+    carregarConfig: async () => ({ config: { responder_fechado: false, delay_min_s: 0, delay_max_s: 0 }, override: fechada2 ? '0' : '1' }),
+    carregarHorarios: async () => ([{ day: HOJE, open: '00:00', close: '23:59', active: true }]),
+    log: { log(){}, warn(){}, error(){} },
+  });
+  await r2.atualizar();
+  fechada2 = true;
+  const s2 = criarSock();
+  const jid2 = '5511900000021@s.whatsapp.net';
+  await r2.tratarMensagem(s2, msg(jid2, 'oi'));
+  checa('loja fechou e responder_fechado:false calou o robô', s2.enviados.length === 0);
+  checa('contato NAO ficou marcado como saudado', !r2._saudados.has(jid2));
+}
+
 secao('Isolamento entre instâncias');
 {
   const a = robo(), b = robo();

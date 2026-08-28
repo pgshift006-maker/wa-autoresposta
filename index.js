@@ -94,7 +94,7 @@ function criarRobo(opcoes) {
   // ── Cache do que vem de fora ───────────────────────────────
   // `tratarMensagem` lê só daqui e NUNCA espera a rede: uma consulta
   // lenta não pode atrasar a resposta ao cliente.
-  const remoto = { config: null, horarios: null, override: null, ok: false };
+  const remoto = { config: null, horarios: null, override: null, ok: false, atualizadoEm: 0 };
 
   // ── Estado por contato ─────────────────────────────────────
   // Em memória: reiniciar o processo zera e um contato pode ser
@@ -163,6 +163,7 @@ function criarRobo(opcoes) {
         if (c.override !== undefined) remoto.override = c.override;
       }
       if (h) remoto.horarios = h;
+      remoto.atualizadoEm = Date.now();
       if (!remoto.ok) { remoto.ok = true; log.log('[wa-auto] configuração carregada.'); }
     } catch (err) {
       // Mantém o cache anterior: melhor config velha que nenhuma.
@@ -227,11 +228,7 @@ function criarRobo(opcoes) {
       const lojaFalouEm = atendente.get(jid);
       if (lojaFalouEm && agora - lojaFalouEm < c.handoffMs) return;
 
-      // 9. Loja fechada e configurado para não responder fora do horário
-      const { texto: mensagem, aberta } = montarMensagem(c);
-      if (aberta === false && !c.responderFechado) return;
-
-      // 10. Teto global por minuto
+      // 9. Teto global por minuto
       if (!dentroDoTeto(agora, c.tetoPorMin)) {
         log.warn('[wa-auto] teto de', c.tetoPorMin, 'respostas/min atingido — ignorando', jid);
         return;
@@ -242,6 +239,18 @@ function criarRobo(opcoes) {
       saudados.set(jid, agora);
       envios.push(agora);
 
+      // Config velha manda mensagem errada: quem acabou de fechar a loja
+      // ainda seria anunciado como aberto até a próxima atualização.
+      // Recarrega aqui, mas SEM esperar por ela agora — a espera acontece
+      // junto com o "digitando" logo abaixo, que já é de segundos. Assim
+      // o texto sai com o dado fresco e o cliente não espera nada a mais.
+      // `!= null` e não `||`: frescorMs = 0 significa "sempre recarregar",
+      // e com `||` viraria o padrão de 15s.
+      const frescorMs = o.frescorMs != null ? o.frescorMs : 15000;
+      const refresco = (Date.now() - remoto.atualizadoEm >= frescorMs)
+        ? atualizar()
+        : Promise.resolve();
+
       // Presença e digitação antes do envio. Responder no mesmo
       // instante é o que denuncia o robô.
       const destino = msg.key.remoteJid;
@@ -251,8 +260,21 @@ function criarRobo(opcoes) {
       const espera = c.delayMaxMs > c.delayMinMs
         ? c.delayMinMs + Math.random() * (c.delayMaxMs - c.delayMinMs)
         : c.delayMinMs;
-      await new Promise(r => setTimeout(r, espera));
+      await Promise.all([refresco, new Promise(r => setTimeout(r, espera))]);
       try { await sock.sendPresenceUpdate('paused', destino); } catch (_) {}
+
+      // Só agora monta o texto, com a configuração mais recente.
+      const cAtual = cfg();
+      const { texto: mensagem, aberta } = montarMensagem(cAtual);
+
+      // Loja fechada e configurado para não responder fora do horário.
+      // A decisão fica aqui, depois do refresco: é o ponto em que sabemos
+      // de verdade se a loja está aberta.
+      if (aberta === false && !cAtual.responderFechado) {
+        saudados.delete(jid);          // não foi saudado — não gasta o cooldown
+        envios.pop();
+        return;
+      }
 
       await sock.sendMessage(destino, { text: mensagem });
       log.log('[wa-auto] 🤖 resposta (' + (aberta === false ? 'fechada' : 'aberta') + ') enviada →', jid);

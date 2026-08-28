@@ -19,7 +19,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "wa-autoresposta": "github:pgshift006-maker/wa-autoresposta"
+  },
   "license": "MIT",
   "scripts": {
     "test": "node teste.js"

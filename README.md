@@ -2,7 +2,7 @@
 
 Resposta automática à primeira mensagem do cliente no WhatsApp, para servidores que usam [Baileys](https://github.com/WhiskeySockets/Baileys).
 
-**Zero dependências · Node 18+ · 59 testes que rodam sem rede**
+**Zero dependências · Node 18+ · 65 testes que rodam sem rede**
 
 Em produção numa hamburgueria: atende o cliente sozinho, sabe se a loja está aberta pelo horário cadastrado, e fica em silêncio quando um atendente humano entra na conversa.
 
@@ -74,6 +74,8 @@ robo.registrarMensagemDaLoja(jid);   // cala o robô nesta conversa
 
 `carregarConfig` e `carregarHorarios` são chamados a cada 60s em segundo plano. `tratarMensagem` lê só do cache e **nunca espera a rede** — uma consulta lenta não atrasa a resposta ao cliente. Se a consulta falhar, o cache anterior continua valendo.
 
+Quando chega uma mensagem e o cache tem mais de `frescorMs` (15s), a config é recarregada **durante** os segundos de "digitando" que antecedem o envio. Sem isso, quem fechasse a loja no painel seria anunciado como aberto por até um minuto — e a espera extra é zero, porque acontece dentro de um atraso que já existia.
+
 ```js
 const { criarFonteSupabase } = require('./wa-autoresposta/fontes/supabase');
 
@@ -110,7 +112,8 @@ criarRobo({
 | `carregarConfig` | — | `async () => ({ config, override })` |
 | `carregarHorarios` | — | `async () => [{ day, open, close, active }]` |
 | `fuso` | `'America/Sao_Paulo'` | Fuso dos horários |
-| `intervaloMs` | `60000` | De quanto em quanto tempo relê a config |
+| `intervaloMs` | `60000` | De quanto em quanto tempo relê a config em segundo plano |
+| `frescorMs` | `15000` | Idade a partir da qual a config é recarregada ao chegar uma mensagem |
 | `prefixoEnv` | `'WA_AUTORESPOSTA'` | Env var que desliga tudo quando vale `0` |
 | `aoResponder` | — | Callback `({ jid, texto, aberta, recebido })` |
 | `log` | `console` | Objeto com `.log`, `.warn`, `.error` |
