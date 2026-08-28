@@ -1,0 +1,27 @@
+{
+  "name": "wa-autoresposta",
+  "version": "1.0.0",
+  "description": "Resposta automática à primeira mensagem do cliente no WhatsApp (Baileys), com horário de funcionamento e proteções contra bloqueio do número.",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "lib/",
+    "fontes/",
+    "README.md"
+  ],
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "autoresposta",
+    "atendimento",
+    "chatbot"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "license": "MIT",
+  "scripts": {
+    "test": "node teste.js"
+  }
+}
